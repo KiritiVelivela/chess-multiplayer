@@ -5,6 +5,7 @@
     "docker-in-docker": "latest",
   },
   "postCreateCommand": "pip install -r requirements.txt",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y redis-server && pip install -r requirements.txt",
   "customizations": {
     "vscode": {
       "extensions": [
