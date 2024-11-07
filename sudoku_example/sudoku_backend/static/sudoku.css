@@ -1,0 +1,43 @@
+/* type selector (all input tags) */
+td {
+  text-align: center;
+  width: 48px;
+  height: 48px;
+  font-size: 24px;
+}
+
+/* class selector, child selector "combinator"
+(all td tags within any tag having class "border_top")
+*/
+table tr:nth-child(1) {
+  border-top: 4px solid #000000;
+}
+
+/* type selector, descendant "combinator" selector, and nth-child "pseudo-class" selector.
+"the 1st, 4th & 7th columns within table rows". */
+table tr td:nth-child(1),
+table tr td:nth-child(4),
+table tr td:nth-child(7) {
+  border-left: 4px solid #000000;
+}
+
+/* class selector, child selector "combinator"
+(all td tags within any tag having class "border_bottom")
+*/
+table tr:nth-child(3),
+table tr:nth-child(6),
+table tr:nth-child(9) {
+  border-bottom: 4px solid #000000;
+}
+
+/* type selector, descendant "combinator" selector, and nth-child "pseudo-class" selector.
+"the 9th column within table rows". */
+table tr td:nth-child(9) {
+  border-right: 4px solid #000000;
+}
+
+/* type selector, attribute selector, pseudo-class selector
+"when mouse hovers over any input tag of type text that is enabled." */
+input[type="text"]:enabled:hover {
+  background-color: yellow;
+}

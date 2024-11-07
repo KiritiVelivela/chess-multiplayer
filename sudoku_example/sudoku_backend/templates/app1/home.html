@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    {% load static %}
+    {% load bootstrap4 %}
+    <meta charset="utf-8">
+    <title>HTML Sudoku Board</title>
+    {% include "bootstrap.html" %}
+    <link rel="stylesheet" href="{% static 'sudoku.css' %}?v=1.01" />
+    <script src="{% static 'sudoku.js' %}"></script>
+</head>
+
+<body>
+    {% include "navigation.html" %}
+    <div class="container">
+        <h1 class="text-center">HTML Sudoku Board</h1>
+        <div class="text-center">
+            <div style="display: inline-block;">
+                <!-- Sudoku Table -->
+                <table id="t1" border="1" class="table-responsive">
+                    {% for row in rows %}
+                    <tr>
+                        {% for name, value in row.items %}
+                        <td id="{{ name }}">
+                            {% if value == 0 %}
+                            &nbsp;
+                            {% else %}
+                            {{ value }}
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </table>
+                <!-- Form -->
+                <div class="jumbotron py-4">
+                    <form method="POST">
+                        {% csrf_token %}
+                        {% bootstrap_form sudoku_form %}
+                        <button type="submit" class="btn btn-primary" name="move">Move</button>
+                        <button type="submit" class="btn btn-primary" name="new_game">New Game</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if room_name %}
+    <div class="container">
+        <div class="jumbotron">
+            <h2>Chat Room: {{ room_name }}</h2>
+            <div id="chat-log"></div>
+            <input id="chat-message-input" type="text" size="50">
+            <button id="chat-message-submit">Send</button>
+            <button id="endChatButton">End Chat</button>
+        </div>
+    </div>
+    <script>
+        const username = "{{ request.user.username|escapejs }}";
+        let roomName = "{{ room_name }}";
+    
+        // Dynamically determine the WebSocket protocol
+        const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+        const chatSocket = new WebSocket(
+            wsScheme + '://' + window.location.host + '/ws/chat/' + roomName + '/'
+        );
+    
+        // Handle WebSocket events
+        chatSocket.onopen = function(e) {
+            console.log("WebSocket connection established.");
+            // Enable the send button or perform any actions that require an open connection
+        };
+    
+        chatSocket.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            document.querySelector('#chat-log').innerHTML += '<b>' + data.username + ':</b> ' + data.message + '<br>';
+        };
+    
+        chatSocket.onerror = function(e) {
+            console.error("WebSocket error observed:", e);
+        };
+    
+        chatSocket.onclose = function(e) {
+            console.log("WebSocket connection closed.");
+        };
+    
+        // Send messages only after ensuring the WebSocket is open
+        document.querySelector('#chat-message-submit').onclick = function(e) {
+            if (chatSocket.readyState === WebSocket.OPEN) {
+                const messageInputDom = document.querySelector('#chat-message-input');
+                const message = messageInputDom.value;
+    
+                if (message.trim() !== "") {
+                    chatSocket.send(JSON.stringify({
+                        'username': username,
+                        'message': message
+                    }));
+                    messageInputDom.value = '';
+                }
+            } else {
+                console.error("WebSocket is not open. Ready state:", chatSocket.readyState);
+                alert("WebSocket connection is not open. Please try again later.");
+            }
+        };
+    
+        // Close the WebSocket connection gracefully when ending the chat
+        const endChatButton = document.getElementById('endChatButton');
+        endChatButton.addEventListener('click', () => {
+            chatSocket.close();
+            roomName = null;
+            // Clear the room_name cookie if applicable
+            document.cookie = "room_name=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+            window.location.assign("/");
+        });
+    </script>
+    
+    {% else %}
+    <div class="container">
+        <div class="jumbotron">
+            <h1>Chat Lobby</h1>
+            <h2>Join a Chat Room</h2>
+            <form method="POST">
+                {% csrf_token %}
+                <label for="room_name">Enter Room Name:</label>
+                <input type="text" name="room_name" id="room_name">
+                <button type="submit">Join Chat</button>
+            </form>
+        </div>
+    </div>
+    {% endif %}
+    <script src="{% static 'chat.js' %}"></script>
+</body>
+
+</html>

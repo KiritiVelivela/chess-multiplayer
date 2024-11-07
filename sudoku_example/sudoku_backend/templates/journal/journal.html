@@ -1,0 +1,69 @@
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Journal</title>
+    {% include "bootstrap.html" %}
+    {% load static %}
+    <script src="{%static 'journal.js' %}"></script>
+    <script>
+        $(document).ready(function () {
+            $('#table1').DataTable();
+        });
+    </script>
+</head>
+
+<body>
+    {% include "navigation.html" %}
+    <div class="jumbotron">
+        <h1>Journal Entries</h1>
+        {% if not table_data %}
+        </p>There are no journal entries to display.</p>
+        {% else %}
+        <table id="table1" class="table-striped" cellspacing="0" width="100%">
+            <thead>
+                <tr>
+                    <th>Date / Time</th>
+                    <th>Description</th>
+                    <th></th>
+                </tr>
+            </thead>
+            {% for row in table_data %}
+            <tr>
+                <td>{{ row.datetime }}</td>
+                <td>{{ row.description }}</td>
+                <td>
+                    <a class="btn btn-primary" href="/journal/edit/{{ row.id }}/">Edit</a>
+                    <a class="btn btn-primary" href="#" onclick="confirmDeleteModal({{ row.id }})">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+        <form method="GET" action="/journal/add/">
+            <input type="submit" class="btn btn-primary" value="Add Journal Entry">
+        </form>
+    </div>
+
+    <!-- Modal -->
+    <div id="deleteModal" class="modal fade" role='dialog'>
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">×</button>
+                    <h4 class="modal-title">Delete Journal Entry</h4>
+                </div>
+                <div class="modal-body">
+                    <p>Do you really want to delete this Journal Entry?</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <span id='deleteButton'></span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!--Modal ends here--->
+</body>
+
+</html>

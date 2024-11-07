@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="utf-8">
+    <title>HTML Sudoku Board</title>
+    {% include "bootstrap.html" %}
+    <link rel="stylesheet" href="{%static 'sudoku.css' %}" />
+</head>
+<body>
+    {% include "navigation.html" %}
+    <div class="container">
+        <h2>How to Play Sudoku</h2>
+        The classic Sudoku game involves a grid of 81 squares. The grid is divided into nine blocks, each containing
+        nine squares. The rules of the game are simple: each of the nine blocks has to contain all the numbers 1-9
+        within its squares. Each number can only appear once in a row, column or box. <sub>Source:
+            https://en.wikipedia.org/wiki/Sudoku</sub>
+        <h2>History of Sudoku</h1>
+            <q>The name Sudoku, or more correctly 数独, comes from Japan and consists of
+                the Japanese characters Su (meaning 'number') and Doku (meaning 'single')
+                but the was not invented in Japan. Sudoku originated in Switzerland and then
+                traveled to Japan by way of America. Sudoku has its deep roots in
+                ancient number puzzles.
+                If you know the Japanese language you may know that the Su Doku characters 数独 are actually ones that
+                originated from Chinese. These two characters have the same meaning in China (number single) but in
+                Mandarin Chinese (pinyin) would be pronounced shùdú. The written version of the characters tells a tale
+                that goes back into the mists of history. The first character Shu ➚ is in two parts. The phonetic
+                radical is lou ➚ 娄 consists of the two characters 'middle' above 'woman' and denotes 'leisure' (possibly
+                representing a woman in the middle of nothing). The second part of Shu has 夂 is 'strike' represented by
+                a hand with a stick. These two parts together denote 'number' perhaps symbolizing counting by scratching
+                marks on the ground. The second character 独 is the one for du ➚ or 'only'. It consists of two parts, the
+                first symbol (radical) is for a dog 犭 that is used for many wild creatures and then 虫 which mean
+                'insect'. These two parts together represent 'only' or 'single'. It is the simplified form of 獨
+                'du'.</q>
+            <sup>1</sup>
+            <sup>1</sup><i><a href="https://www.sudokudragon.com/sudokuhistory.htm">www.sudokudragon.com</a></i>
+    </div>
+</body>
+
+</html>

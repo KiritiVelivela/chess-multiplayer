@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% load static %}
+    <meta charset="utf-8">
+    <title>HTML Sudoku Board</title>
+    {% include "bootstrap.html" %}
+    <link rel="stylesheet" href="{%static 'sudoku.css' %}" />
+</head>
+<body onload="initBoard()">
+    {% include "navigation.html" %}
+    <div class="container">
+        <h2>Sample About Page</h2>
+        <div class="jumbotron, margin">
+            <h2>Brian Herring</h2>
+            <a href="https://www.linkedin.com/in/herringbrian/" target="_blank">
+                <h5>Linkedin Profile</h5>
+            </a>
+            <div class="jumbotron, margin">
+                <h5>I was born in Seattle, Washington and grew up in the East Bay Area. I graduated Highschool in 1980,
+                    attended Diablo Valley College for two years and earned a AA degree in 1982. I then attened CSU,
+                    Chico for 3 years and graduated from there with a BS in Computer Science in 1985. I worked as a
+                    software engineer for various Silicon Valley companies from May 1985 to January 2019. While working,
+                    I went back to CSUC parttime from 2004 to 2008 and earned an MS in Computer Science so that I could
+                    teach at the university. I am now semi-retired, teaching CS courses parttime at CSUC which I really
+                    enjoy. When I'm not teaching I enjoy spending time with family and friends, reading or listening to
+                    music. I love having summers off!
+                    I like to ride my motorcycle and mountain bike off-road. I have been serving in my local community
+                    as a volunteer firefighter since 2015. My favorite vacation spot is Disneyland. I am active in a
+                    local church congregation.</h5>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
