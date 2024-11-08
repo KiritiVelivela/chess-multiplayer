@@ -1,0 +1,35 @@
+{% extends 'base.html' %}
+
+{% block title %}Edit Journal{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>Edit Journal for Game Against 
+        {% if game.player_white == user %}
+            {{ game.player_black.username }}
+        {% else %}
+            {{ game.player_white.username }}
+        {% endif %}
+    </h2>
+
+    <form method="POST">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit" class="btn btn-primary">Save Journal</button>
+        <a href="{% url 'home' %}" class="btn btn-secondary">Cancel</a>
+    </form>
+
+    <hr>
+    <h4>Game Details (Read-Only)</h4>
+    <p>Number of Moves: {{ game.move_count }}</p>
+    <p>Game Outcome: 
+        {% if game.winner == user %}
+            Win
+        {% elif game.winner %}
+            Loss
+        {% else %}
+            Ongoing
+        {% endif %}
+    </p>
+</div>
+{% endblock %}

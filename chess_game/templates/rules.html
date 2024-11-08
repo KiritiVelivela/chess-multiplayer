@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+
+{% block title %}Rules - My Website{% endblock %}
+
+{% block content %}
+<div class="rules">
+    <h4>Rules</h4>
+    <ul>
+        <li>
+        <b>Pawn:</b> Pawns move forward one square but capture diagonally. On its first move, a pawn can advance two squares. If a pawn reaches the opposite end of the board, it can be promoted to any other piece, typically a queen.
+        </li>
+        <li>
+        <b>Rook:</b> Rooks can move horizontally or vertically any number of squares. They are powerful pieces for controlling open files and ranks on the board.
+        </li>
+        <li>
+        <b>Knight:</b> Knights move in an "L" shape—two squares in one direction and one square perpendicular. Knights are the only pieces that can "jump" over other pieces, making them valuable in crowded positions.
+        </li>
+        <li>
+        <b>Bishop:</b> Bishops move diagonally any number of squares. Each player has two bishops, one that moves on light-colored squares and one on dark-colored squares, giving them control over specific color complexes on the board.
+        </li>
+        <li>
+        <b>Queen:</b> The queen is the most powerful piece on the board, able to move any number of squares in any direction—vertically, horizontally, or diagonally. Its versatility makes it a key offensive piece.
+        </li>
+        <li>
+        <b>King:</b> The king can move one square in any direction. While the king is the most important piece (since losing it means losing the game), it is not very powerful in terms of mobility and must be protected at all times.
+        </li>
+    </ul>
+</div>
+{% endblock %}

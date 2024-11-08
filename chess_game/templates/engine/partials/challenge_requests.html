@@ -1,0 +1,16 @@
+{% if challenges_received %}
+    <ul>
+        {% for challenge in challenges_received %}
+        <li>
+            {{ challenge.challenger.username }} has challenged you to a game!
+            <form method="POST" action="{% url 'respond_challenge' challenge.id %}">
+                {% csrf_token %}
+                <button type="submit" name="action" value="accept" class="btn btn-success">Accept</button>
+                <button type="submit" name="action" value="reject" class="btn btn-danger">Reject</button>
+            </form>
+        </li>
+        {% endfor %}
+    </ul>
+{% else %}
+    <p>No new challenges.</p>
+{% endif %}

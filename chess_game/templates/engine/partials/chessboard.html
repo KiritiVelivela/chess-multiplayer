@@ -1,0 +1,48 @@
+<div id="chessboard-with-border">
+    <div class="emptyTile"></div>
+    <div class="labelTile">a</div>
+    <div class="labelTile">b</div>
+    <div class="labelTile">c</div>
+    <div class="labelTile">d</div>
+    <div class="labelTile">e</div>
+    <div class="labelTile">f</div>
+    <div class="labelTile">g</div>
+    <div class="labelTile">h</div>
+
+    {% for rank, label in board_structure %}
+    <div class="labelTile">{{ label }}</div> <!-- Rank labels are passed -->
+    {% for square in rank %}
+    <div class="chessTile">
+        {% if square %}
+            {% if square == 'P' %}
+                &#9817;  <!-- White pawn -->
+            {% elif square == 'R' %}
+                &#9814;  <!-- White rook -->
+            {% elif square == 'N' %}
+                &#9816;  <!-- White knight -->
+            {% elif square == 'B' %}
+                &#9815;  <!-- White bishop -->
+            {% elif square == 'Q' %}
+                &#9813;  <!-- White queen -->
+            {% elif square == 'K' %}
+                &#9812;  <!-- White king -->
+            {% elif square == 'p' %}
+                &#9823;  <!-- Black pawn -->
+            {% elif square == 'r' %}
+                &#9820;  <!-- Black rook -->
+            {% elif square == 'n' %}
+                &#9822;  <!-- Black knight -->
+            {% elif square == 'b' %}
+                &#9821;  <!-- Black bishop -->
+            {% elif square == 'q' %}
+                &#9819;  <!-- Black queen -->
+            {% elif square == 'k' %}
+                &#9818;  <!-- Black king -->
+            {% endif %}
+        {% else %}
+            &nbsp;  <!-- Empty square -->
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endfor %}
+</div>

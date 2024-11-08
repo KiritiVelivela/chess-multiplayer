@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block title %}Rules - My Website{% endblock %}
+
+{% block content %}
+
+{% if request.user.is_authenticated %}
+  {{ request.user.username }}
+  Logout
+{% else %}
+  Login
+  Signup
+{% endif %}
+
+Welcome!
+
+{% endblock %}

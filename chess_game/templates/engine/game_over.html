@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+
+{% block title %}Game Over{% endblock %}
+
+{% block content %}
+<h2>Game Over</h2>
+<p>
+    {% if resigned_player == game.player_white %}
+        {{ game.player_white.username }} has resigned. 
+    {% elif resigned_player == game.player_black %}
+        {{ game.player_black.username }} has resigned. 
+    {% endif %}
+</p>
+<p>The winner is: {{ winner.username }}</p>
+
+<a href="{% url 'home' %}" class="btn btn-primary">Go to Home</a>
+{% endblock %}

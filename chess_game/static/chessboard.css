@@ -1,0 +1,66 @@
+/*
+  Create your CSS for Project 1 here...
+*/
+body {
+  font-family: sans-serif;
+}
+
+.chessboard-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  align-items: center;
+}
+
+.chessTile {
+  font-size: 40px;
+  line-height: 60px;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 60px;
+  height: 60px;
+}
+
+#chessboard-with-border {
+  display: grid;
+  grid-template-columns: 20px repeat(8, 60px);
+  grid-template-rows: 20px repeat(8, 60px);
+  gap: 0;
+  border: 1px solid black;
+  margin: auto;
+}
+
+#chessboard-with-border > .chessTile:nth-child(odd) {
+  background-color: tan;
+}
+
+#chessboard-with-border > .chessTile:nth-child(even) {
+  background-color: chocolate;
+}
+
+
+.labelTile {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-weight: bold;
+  font-size: 18px;
+  background-color: tan;
+}
+
+.emptyTile {
+  background-color: transparent;
+}
+
+.chessboardButtons {
+  margin-top: 1%;
+}
+
+.snap {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+  width: 50%;
+}
