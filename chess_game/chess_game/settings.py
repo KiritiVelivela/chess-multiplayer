@@ -58,6 +58,7 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # Expire session when browser is closed
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -85,7 +86,18 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'chess_game.wsgi.application'
+# WSGI_APPLICATION = 'chess_game.wsgi.application'
+
+ASGI_APPLICATION = 'chess_game.asgi.application'
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("172.17.0.2", 6379)],  # Redis server address and port
+        },
+    },
+}
 
 
 # Database

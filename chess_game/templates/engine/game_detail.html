@@ -23,10 +23,9 @@
 </div>
 
 <div class="row justify-content-center">
-    <form method="POST" action="{% url 'resign_game' game.id %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Resign</button>
-    </form>
+    <div class="row justify-content-center">
+        <button type="button" class="btn btn-danger" id="resignButton">Resign</button>
+    </div>
 </div>
 
 
@@ -57,96 +56,104 @@
 <hr/>
 {% endif %}
 <script>
+    const gameSocket = new WebSocket(
+        'ws://' + window.location.host + '/ws/game/{{ game.id }}/'
+    );
 
-let lastBoardFen = "{{ game.current_fen }}";  // Store the last known board state
+    gameSocket.onopen = function(e) {
+        console.log("WebSocket connected.");
+    }
 
-function checkGameStatus() {
-    $.ajax({
-        url: "{% url 'check_game_status' game.id %}",
-        method: "GET",
-        success: function(data) {
-            if (data.game_over) {
-                // If the game is over, display a message and redirect to the result page
-                alert("The game is over. Winner: " + data.winner);
-                window.location.href = "{% url 'game_over' game.id %}";
-            } else {
-                // If the board state has changed, update it dynamically
-                if (data.board_fen !== lastBoardFen) {
-                    updateBoard(data.board_fen, data.turn);  // Function to update the board based on FEN
-                    lastBoardFen = data.board_fen;  // Update the last known board state
+    document.getElementById("resignButton").addEventListener("click", function () {
+        if (confirm("Are you sure you want to resign?")) {
+            console.log("INSIDE RESIGN CONFIRMATION")
+            // Send a resignation event via WebSocket
+            gameSocket.send(JSON.stringify({
+                'action': 'game_resigned'
+            }));
+        }
+    });
+
+    gameSocket.onmessage = function(e) {
+        
+        const data = JSON.parse(e.data);
+
+        if (data.status === 'success') {
+            updateBoard(data.fen, data.turn);  // Update board and turn
+        } else if (data.status === 'error') {
+            alert(data.message);  // Show error messages
+        } else if (data.type === "game_resigned") {
+            console.log(`Game resigned by opponent. Winner: ${data.winner}`);
+            // alert(`The game is over. ${data.winner} has won!`);
+            showResignationModal(data.winner);
+        }
+    };
+
+    gameSocket.onclose = function(e) {
+        console.error('WebSocket closed unexpectedly');
+    };
+
+    document.querySelector('#move-form').onsubmit = function(e) {
+        e.preventDefault();
+        const moveInput = document.querySelector('#move-input').value;
+
+        gameSocket.send(JSON.stringify({
+            'action': 'move',
+            'move': moveInput
+        }));
+
+        document.querySelector('#move-input').value = '';
+    };
+
+    function updateBoard(fen, turn) {
+        // Update the board via an AJAX request or render client-side
+        $.ajax({
+            url: "{% url 'update_board' game.id %}",
+            method: "GET",
+            success: function(data) {
+                $('#chessboard-with-border').html(data.board_html);
+
+                // Update whose turn it is
+                if (turn) {
+                    $('.turn-indicator').text("It's White's turn!").removeClass('alert-dark').addClass('alert-light');
+                } else {
+                    $('.turn-indicator').text("It's Black's turn!").removeClass('alert-light').addClass('alert-dark');
                 }
             }
-        }
-    });
-}
+        });
+    }
 
-$('#move-form').submit(function(event) {
-    event.preventDefault();  // Prevent the default form submission
+    function showResignationModal(winner) {
+        const modalHTML = `
+            <div class="modal fade" id="resignationModal" tabindex="-1" aria-labelledby="resignationModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="resignationModalLabel">Game Over</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            The game is over. <strong>${winner}</strong> has won!
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" id="homeRedirectButton">Go to Home</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        const modal = new bootstrap.Modal(document.getElementById('resignationModal'));
+        modal.show();
 
-    // Get the move input
-    var move = $('#move-input').val();
+        // Redirect to home after a delay or button click
+        document.getElementById('homeRedirectButton').onclick = function () {
+            window.location.href = '/';
+        };
 
-    // Disable polling during move submission
-    clearInterval(gameStatusInterval);
-
-    $.ajax({
-        url: "{% url 'game_detail' game.id %}",
-        method: "POST",
-        data: {
-            'move': move,
-            'csrfmiddlewaretoken': '{{ csrf_token }}'
-        },
-        success: function(response) {
-            if (response.invalid_move) {
-                // Show invalid move message
-                alert(response.invalid_move);
-            } else {
-                // Update the board with the new move
-                updateBoard(response.board_fen, response.turn);
-                $('#move-input').val('');  // Clear the move input field
-                lastBoardFen = response.board_fen;  // Update the last known board state
-            }
-
-            // Re-enable polling after move submission
-            gameStatusInterval = setInterval(checkGameStatus, 5000);
-        },
-        error: function() {
-            alert("An error occurred while submitting the move.");
-
-            // Re-enable polling if there was an error
-            gameStatusInterval = setInterval(checkGameStatus, 5000);
-        }
-    });
-});
-
-// Function to update the board using the FEN string dynamically
-function updateBoard(fen, turn) {
-    $.ajax({
-        url: "{% url 'update_board' game.id %}",
-        method: "GET",
-        success: function(data) {
-            $('#chessboard-with-border').html(data.board_html);
-
-            if (turn) {
-                // It's White's turn
-                $('.turn-indicator').text("It's White's turn!").removeClass('alert-dark').addClass('alert-light');
-            } else {
-                // It's Black's turn
-                $('.turn-indicator').text("It's Black's turn!").removeClass('alert-light').addClass('alert-dark');
-            }
-        },
-        error: function() {
-            alert("An error occurred while updating the board.");
-        }
-    });
-}
-
-// Start polling only if the game is ongoing
-let gameStatusInterval;
-{% if is_ongoing %}
-    gameStatusInterval = setInterval(checkGameStatus, 5000);  // Poll every 5 seconds
-{% endif %}
-
-
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 5000);
+    }
 </script>
 {% endblock %}

@@ -35,7 +35,7 @@
                 <div class="card-body">
                     <h4 class="card-title text-center">Challenge Requests</h4>
                     <div id="challenge-requests">
-                        {% include 'engine/partials/challenge_requests.html' %}
+                        <p>Loading challenges...</p>
                     </div>
                 </div>
             </div>
@@ -99,48 +99,107 @@
 </div>
 
 <script>
-    function checkForChallenges() {
-        $.ajax({
-            url: "{% url 'check_challenges' %}",
-            method: "GET",
-            success: function(data) {
-                if (data.challenges) {
-                    $("#challenge-requests").html(data.challenges_html);
-                }
-            }
-        });
-    }
+    const homeSocket = new WebSocket(
+        'ws://' + window.location.host + '/ws/home/'
+    );
 
-    function checkForGameStart() {
-        $.ajax({
-            url: "{% url 'check_game_start' %}",
-            method: "GET",
-            success: function(data) {
-                if (data.game_started) {
-                    window.location.href = data.game_url;
-                }
-            }
-        });
-    }
+    homeSocket.onopen = function () {
+        console.log("WebSocket connected.");
+        // Request challenges and available players on connect
+        homeSocket.send(JSON.stringify({ action: "get_challenges" }));
+        homeSocket.send(JSON.stringify({ action: "get_available_players" }));
+    };
 
-    function sendHeartbeat() {
-        $.ajax({
-            url: "{% url 'heartbeat' %}",
-            method: "POST",
-            headers: {
-                'X-CSRFToken': '{{ csrf_token }}'
-            },
-            success: function(data) {
-                console.log('Heartbeat sent');
-            },
-            error: function() {
-                console.log('Error sending heartbeat');
-            }
-        });
-    }
+    homeSocket.onmessage = function (e) {
+        const data = JSON.parse(e.data);
 
-    setInterval(sendHeartbeat, 300000);
-    setInterval(checkForGameStart, 5000);
-    setInterval(checkForChallenges, 5000);
+        if (data.type === "challenges") {
+            const challengeRequestsDiv = document.querySelector("#challenge-requests");
+            if (data.challenges.length > 0) {
+                let challengesHTML = "<ul>";
+                data.challenges.forEach(challenge => {
+                    challengesHTML += `
+                        <li>
+                            ${challenge.challenger} has challenged you to a game!
+                            <button onclick="respondChallenge(${challenge.id}, 'accept')" class="btn btn-success">Accept</button>
+                            <button onclick="respondChallenge(${challenge.id}, 'reject')" class="btn btn-danger">Reject</button>
+                        </li>
+                    `;
+                });
+                challengesHTML += "</ul>";
+                challengeRequestsDiv.innerHTML = challengesHTML;
+            } else {
+                challengeRequestsDiv.innerHTML = "<p>No new challenges.</p>";
+            }
+        }
+
+        if (data.type === "game_history") {
+            const gameHistoryTable = document.querySelector("tbody");
+            gameHistoryTable.innerHTML = "";  // Clear existing rows
+
+            data.games.forEach((game, index) => {
+                const row = `
+                    <tr>
+                        <td>${index + 1}</td>
+                        <td>${game.opponent}</td>
+                        <td>
+                            ${game.result === "Win" ? '<span class="badge bg-success">Win</span>' : 
+                            game.result === "Loss" ? '<span class="badge bg-danger">Loss</span>' : 
+                            '<span class="badge bg-warning text-dark">Ongoing</span>'}
+                        </td>
+                        <td>${game.move_count}</td>
+                        <td>${game.journal_entry}</td>
+                        <td>
+                            <a href="/edit_journal/${game.id}/" class="btn btn-primary btn-sm">Edit</a>
+                            <form method="POST" action="/delete_game/${game.id}/" style="display:inline;">
+                                <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+                                <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Are you sure you want to delete this game?');">Delete</button>
+                            </form>
+                        </td>
+                    </tr>
+                `;
+                gameHistoryTable.innerHTML += row;
+            });
+        }
+
+        if (data.type === "available_players") {
+            const playerSelect = document.getElementById("player_black");
+            playerSelect.innerHTML = "";  // Clear existing options
+
+            data.players.forEach(player => {
+                const option = document.createElement("option");
+                option.value = player.id;
+                option.textContent = player.username;
+                playerSelect.appendChild(option);
+            });
+        }
+
+        if (data.type === "game_start") {
+            if (data.game_url) {
+                console.log("inside IF");
+                console.log(data)
+                console.log("===========================")
+                window.location.href = data.game_url;  // Redirect to game URL
+            } else {
+                console.error("Game start URL is missing.");
+                console.error(data);
+            }
+        }
+    };
+
+    homeSocket.onclose = function () {
+        console.error("WebSocket closed. Reconnecting in 5 seconds...");
+        setTimeout(() => {
+            location.reload(); // Refresh to reconnect
+        }, 5000);
+    };
+
+    function respondChallenge(challengeId, action) {
+        homeSocket.send(JSON.stringify({
+            action: "respond_challenge",
+            challenge_id: challengeId,
+            response: action
+        }));
+    }
 </script>
 {% endblock %}
