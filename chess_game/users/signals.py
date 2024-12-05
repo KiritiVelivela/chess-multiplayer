@@ -20,13 +20,16 @@ def user_logged_out_handler(sender, request, user, **kwargs):
     user.userstatus.save()
 
 @receiver(post_save, sender=UserStatus)
-def user_status_changed(sender, instance, **kwargs):
+def update_available_players(sender, instance, **kwargs):
     channel_layer = get_channel_layer()
-    available_players = UserStatus.objects.filter(is_logged_in=True).values('user__id', 'user__username')
-    async_to_sync(channel_layer.group_send)(
-        "home",
-        {
-            "type": "broadcast_available_players",
-            "players": list(available_players),
-        }
-    )
+    if instance.is_logged_in:
+        async_to_sync(channel_layer.group_send)(
+            "home",
+            {
+                "type": "broadcast_available_players",
+                "players": [
+                    {"id": player.user.id, "username": player.user.username}
+                    for player in UserStatus.objects.filter(is_logged_in=True)
+                ],
+            }
+        )

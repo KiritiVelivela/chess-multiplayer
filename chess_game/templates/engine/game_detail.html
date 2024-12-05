@@ -7,15 +7,12 @@
 <h2 class="text-center">CSCI 620: Chess Game by Satya Kiriti Velivela</h2>
 
 <div class="row justify-content-center">
-    <div class="chessboard-container">
-        {% include 'engine/partials/chessboard.html' %}
-    </div>
+    <div id="chessboard-with-border" class="chessboard-container"></div>
 </div>
 
 <div class="row justify-content-center text-center">
     <div class="chessboardButtons">
-        <form id="move-form" method="POST">
-            {% csrf_token %}
+        <form id="move-form">
             <input type="text" id="move-input" placeholder="Enter move (e.g., e2e4)" name="move" class="form-control d-inline-block" style="width: auto; display: inline;">
             <button type="submit" class="btn btn-primary">Move</button>
         </form>
@@ -42,16 +39,15 @@
 
 <!-- Show whose turn it is -->
 <div class="row justify-content-center">
-    <div class="alert turn-indicator {% if board.turn == chess.WHITE %}alert-light{% else %}alert-dark{% endif %}">
-        It's {% if board.turn == chess.WHITE %}White{% else %}Black{% endif %}'s turn.
+    <div class="alert turn-indicator ">
     </div>
 </div>
 
-{% if invalid_move %}
+<!-- {% if invalid_move %}
     <div class="alert alert-danger">
         Invalid move: {{ invalid_move }}
     </div>
-{% endif %}
+{% endif %} -->
 
 <hr/>
 {% endif %}
@@ -74,6 +70,29 @@
         }
     });
 
+    document.addEventListener("DOMContentLoaded", function () {
+        const moveForm = document.querySelector('#move-form');
+
+        // Attach the event listener
+        moveForm.onsubmit = function (e) {
+            e.preventDefault(); // Prevent form's default POST action
+            console.log("Move form submitted.");
+
+            const moveInput = document.querySelector('#move-input').value;
+
+            // Send the move to the WebSocket
+            gameSocket.send(JSON.stringify({
+                'action': 'move',
+                'move': moveInput
+            }));
+
+            // Clear the input field
+            document.querySelector('#move-input').value = '';
+        };
+
+        console.log("Move form listener attached.");
+    });
+
     gameSocket.onmessage = function(e) {
         
         const data = JSON.parse(e.data);
@@ -81,17 +100,31 @@
         if (data.status === 'success') {
             updateBoard(data.fen, data.turn);  // Update board and turn
         } else if (data.status === 'error') {
-            alert(data.message);  // Show error messages
-        } else if (data.type === "game_resigned") {
+            console.log("ON MESSAGE error");
+            console.log(data);
+            showErrorModal(data.message); // Show a styled error alert
+        } else if (data.status === "game_resigned") {
             console.log(`Game resigned by opponent. Winner: ${data.winner}`);
             // alert(`The game is over. ${data.winner} has won!`);
             showResignationModal(data.winner);
+        } else if (data.type === "game_update") {
+            console.log("CALLING UPDATEBOARD")
+            updateBoard(data.fen, data.turn); // Update board based on FEN and turn
         }
     };
 
     gameSocket.onclose = function(e) {
         console.error('WebSocket closed unexpectedly');
     };
+
+    // Render the initial board from the FEN passed from the server
+    document.addEventListener("DOMContentLoaded", function () {
+        const initialFEN = "{{ fen }}"; // FEN string passed from the server
+        const initialTurn = "{{ turn }}"; // Turn (true for white, false for black)
+        console.log("Board Loading turn = " + initialTurn);
+        console.log("Initial load FEN = " + initialFEN);
+        updateBoard(initialFEN, initialTurn === 'True');
+    });
 
     document.querySelector('#move-form').onsubmit = function(e) {
         e.preventDefault();
@@ -106,21 +139,85 @@
     };
 
     function updateBoard(fen, turn) {
-        // Update the board via an AJAX request or render client-side
-        $.ajax({
-            url: "{% url 'update_board' game.id %}",
-            method: "GET",
-            success: function(data) {
-                $('#chessboard-with-border').html(data.board_html);
+        console.log("UPDATE BOARD CALLED");
+        const boardElement = document.querySelector("#chessboard-with-border");
+        const rows = fen.split(" ")[0].split("/");
+        let boardHTML = "";
 
-                // Update whose turn it is
-                if (turn) {
-                    $('.turn-indicator').text("It's White's turn!").removeClass('alert-dark').addClass('alert-light');
+        // Add top row for column labels
+        // boardHTML += `<div class="board-row">`;
+        // boardHTML += `<div class="board-cell label"></div>`; // Empty top-left corner
+        // for (let col = 0; col < 8; col++) {
+        //     boardHTML += `<div class="board-cell label">${String.fromCharCode(97 + col)}</div>`;
+        // }
+        // boardHTML += `</div>`;
+
+        // Generate board rows
+        rows.forEach((row, rowIndex) => {
+            boardHTML += `<div class="board-row">`;
+
+            // Add row number on the left
+            // boardHTML += `<div class="board-cell label">${8 - rowIndex}</div>`;
+
+            // Generate chessboard cells
+            for (const char of row) {
+                if (isNaN(char)) {
+                    const piece = getPieceFromFENChar(char);
+                    boardHTML += `<div class="board-cell">
+                                    <span class="chess-piece ${piece.color}">${piece.symbol}</span>
+                                </div>`;
                 } else {
-                    $('.turn-indicator').text("It's Black's turn!").removeClass('alert-light').addClass('alert-dark');
+                    for (let i = 0; i < parseInt(char); i++) {
+                        boardHTML += `<div class="board-cell empty"></div>`;
+                    }
                 }
             }
+
+            // Add row number on the right
+            boardHTML += `<div class="board-cell label">${8 - rowIndex}</div>`;
+            boardHTML += `</div>`;
         });
+
+        // Add bottom row for column labels
+        boardHTML += `<div class="board-row">`;
+        // boardHTML += `<div class="board-cell label"></div>`; // Empty bottom-left corner
+        for (let col = 0; col < 8; col++) {
+            boardHTML += `<div class="board-cell label">${String.fromCharCode(97 + col)}</div>`;
+        }
+        boardHTML += `</div>`;
+
+        boardElement.innerHTML = boardHTML;
+
+        // Update the turn indicator
+        const turnIndicator = document.querySelector(".turn-indicator");
+        console.log("Turn received from backend:", turn);  // Frontend log
+        if (turn) {
+            turnIndicator.textContent = "It's White's turn!";
+            turnIndicator.classList.remove("alert-dark");
+            turnIndicator.classList.add("alert-light");
+        } else {
+            turnIndicator.textContent = "It's Black's turn!";
+            turnIndicator.classList.remove("alert-light");
+            turnIndicator.classList.add("alert-dark");
+        }
+    }
+
+    function getPieceFromFENChar(char) {
+        const pieceSymbols = {
+            p: { color: "black", symbol: "♟" },
+            r: { color: "black", symbol: "♜" },
+            n: { color: "black", symbol: "♞" },
+            b: { color: "black", symbol: "♝" },
+            q: { color: "black", symbol: "♛" },
+            k: { color: "black", symbol: "♚" },
+            P: { color: "white", symbol: "♙" },
+            R: { color: "white", symbol: "♖" },
+            N: { color: "white", symbol: "♘" },
+            B: { color: "white", symbol: "♗" },
+            Q: { color: "white", symbol: "♕" },
+            K: { color: "white", symbol: "♔" },
+        };
+        return pieceSymbols[char];
     }
 
     function showResignationModal(winner) {
@@ -132,7 +229,7 @@
                             <h5 class="modal-title" id="resignationModalLabel">Game Over</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <div class="modal-body">
+                        <div class="modal-body" >
                             The game is over. <strong>${winner}</strong> has won!
                         </div>
                         <div class="modal-footer">
@@ -154,6 +251,43 @@
         setTimeout(() => {
             window.location.href = '/';
         }, 5000);
+    }
+
+    function showErrorModal(message) {
+        console.log("Inside showerrormodal == " + message);
+        const modalHTML = `
+            <div class="modal fade" id="errorModal" tabindex="-1" role="dialog" aria-labelledby="errorModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title text-danger" id="errorModalLabel">Invalid Move</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body"id="errorModalBody" >
+                            <strong>${message}</stong>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        // Append the modal HTML to the body
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        // Initialize and show the modal
+        const modal = new bootstrap.Modal(document.getElementById('errorModal'));
+        modal.show();
+
+        // Automatically remove the modal from the DOM after it's closed
+        const errorModalElement = document.getElementById('errorModal');
+        errorModalElement.addEventListener('hidden.bs.modal', () => {
+            errorModalElement.remove();
+        });
     }
 </script>
 {% endblock %}

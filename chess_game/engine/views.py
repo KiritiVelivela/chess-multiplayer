@@ -18,6 +18,16 @@ import chess
 # Create your views here.
 @login_required(login_url='login')
 def home(request):
+    # Check if the user has an ongoing game
+    ongoing_game = Game.objects.filter(
+        models.Q(player_white=request.user) | models.Q(player_black=request.user),
+        game_over=False
+    ).first()
+
+    if ongoing_game:
+        # Redirect to the game detail page if an ongoing game exists
+        return redirect('game_detail', game_id=ongoing_game.id)
+    
     if request.method == 'POST':
 
         challenged_player_id = request.POST.get('player_black')
@@ -188,40 +198,23 @@ def generate_board_structure_with_labels(board):
     zipped_structure = zip(board_structure, rank_labels)
     return zipped_structure
 
+@login_required(login_url='login')
 def game_detail(request, game_id):
+    # Fetch the game object
     game = get_object_or_404(Game, id=game_id)
+
+    # Create the board object based on the game's current state
     board = chess.Board(game.current_fen)
 
-    board_structure = generate_board_structure_with_labels(board)
-
-    if request.method == "POST":
-        move_input = request.POST.get("move")
-
-        current_player = game.player_white if board.turn == chess.WHITE else game.player_black
-
-        if request.user != current_player:
-            return JsonResponse({'invalid_move': 'It is not your turn!'})
-
-        try:
-            move = chess.Move.from_uci(move_input)
-        except ValueError:
-            return JsonResponse({'invalid_move': 'Invalid move format. Please enter in the correct format (e.g., e2e4).'})
-
-        if move in board.legal_moves:
-            board.push(move)
-            game.current_fen = board.fen()
-            game.save()
-
-            return JsonResponse({'board_fen': board.fen(), 'invalid_move': None, 'turn': board.turn})
-        else:
-            return JsonResponse({'invalid_move': 'This move is invalid. Please make a legal move.'})
-
+    # Pass initial rendering context to the template
     context = {
         'game': game,
-        'board_structure': board_structure,
-        'invalid_move': None,
-        'is_ongoing': not game.game_over
+        'fen': game.current_fen,  # FEN for the initial state
+        'is_ongoing': not game.game_over,  # Is the game still active?
+        'player_color': 'white' if request.user == game.player_white else 'black',
+        'turn': board.turn == chess.WHITE
     }
+
     return render(request, 'engine/game_detail.html', context)
 
 def update_board(request, game_id):

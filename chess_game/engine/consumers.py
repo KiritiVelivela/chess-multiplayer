@@ -30,6 +30,10 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
                 self.channel_name
             )
             await self.accept()
+            # Mark user as online
+            await sync_to_async(UserStatus.objects.filter(user=self.user).update)(is_logged_in=True)
+            await self.send_available_players()  # Notify all users of the updated list      
+            await self.send_game_history()      
         else:
             await self.close()
 
@@ -46,6 +50,9 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
                 "home",
                 self.channel_name
             )
+            # Mark user as offline
+            await sync_to_async(UserStatus.objects.filter(user=self.user).update)(is_logged_in=False)
+            await self.send_available_players()  # Notify all users of the updated list
 
     async def receive_json(self, content):
         """
@@ -60,6 +67,160 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             await self.send_available_players()
         elif action == "respond_challenge":
             await self.handle_challenge_response(content)
+        elif action == "send_challenge":
+            await self.handle_send_challenge(content)
+        elif action == "edit_journal":
+            await self.handle_edit_journal(content)
+        elif action == "delete_game":
+            await self.handle_delete_game(content)
+        elif action == "save_journal":
+            await self.save_journal(content)
+
+    async def handle_edit_journal(self, content):
+        """
+        Handle the request to edit a game's journal.
+        """
+        game_id = content.get("game_id")
+        if not game_id:
+            await self.send_json({"type": "error", "message": "No game ID provided for editing."})
+            return
+
+        try:
+            game = await sync_to_async(Game.objects.get)(id=game_id)
+            player_white = await sync_to_async(lambda: game.player_white)()
+            player_black = await sync_to_async(lambda: game.player_black)()
+
+            if player_white == self.user or player_black == self.user:
+                # Send back game details for editing
+                game_data = {
+                    "id": game.id,
+                    "journal_entry": game.journal_entry or "",
+                    "opponent": player_black.username if player_white == self.user else player_white.username,
+                }
+                await self.send_json({"type": "edit_journal_data", "game": game_data})
+            else:
+                await self.send_json({"type": "error", "message": "You are not authorized to edit this journal."})
+        except Game.DoesNotExist:
+            await self.send_json({"type": "error", "message": "Game not found."})
+
+    async def save_journal(self, content):
+        """
+        Save the updated journal for a game.
+        """
+        game_id = content.get("game_id")
+        journal_entry = content.get("journal_entry")
+
+        if not game_id or journal_entry is None:
+            await self.send_json({"type": "error", "message": "Invalid data for journal update."})
+            return
+
+        try:
+            game = await sync_to_async(Game.objects.get)(id=game_id)
+            player_white = await sync_to_async(lambda: game.player_white)()
+            player_black = await sync_to_async(lambda: game.player_black)()
+
+            if player_white == self.user or player_black == self.user:
+                game.journal_entry = journal_entry
+                await sync_to_async(game.save)()
+                player_white_id = player_white.id if player_white else None
+                player_black_id = player_black.id if player_black else None
+                # Notify all users of the updated game history
+                                # Notify both players of the deletion
+                if player_white_id:
+                    await self.channel_layer.group_send(
+                        f"user_{player_white_id}",
+                        {
+                            "type": "send_game_broadcast",
+                            "game_id": game_id,
+                        }
+                    )
+                if player_black_id:
+                    await self.channel_layer.group_send(
+                        f"user_{player_black_id}",
+                        {
+                            "type": "send_game_broadcast",
+                            "game_id": game_id,
+                        }
+                    )
+            else:
+                await self.send_json({"type": "error", "message": "You are not authorized to edit this journal."})
+        except Game.DoesNotExist:
+            await self.send_json({"type": "error", "message": "Game not found."})
+
+    async def handle_delete_game(self, content):
+        """
+        Handle the request to delete a game.
+        """
+        game_id = content.get("game_id")
+        if not game_id:
+            await self.send_json({"type": "error", "message": "No game ID provided for deletion."})
+            return
+
+        try:
+            game = await sync_to_async(Game.objects.get)(id=game_id)
+            player_white = await sync_to_async(lambda: game.player_white)()
+            player_black = await sync_to_async(lambda: game.player_black)()
+            if player_white == self.user or player_black == self.user:
+                # Get the IDs of both players
+                player_white_id = player_white.id if player_white else None
+                player_black_id = player_black.id if player_black else None
+
+                # Delete the game
+                await sync_to_async(game.delete)()
+                print(f"Game {game_id} deleted by user {self.user.id}. Broadcasting to involved players.")
+
+                # Notify both players of the deletion
+                if player_white_id:
+                    await self.channel_layer.group_send(
+                        f"user_{player_white_id}",
+                        {
+                            "type": "delete_game_broadcast",
+                            "game_id": game_id,
+                        }
+                    )
+                if player_black_id:
+                    await self.channel_layer.group_send(
+                        f"user_{player_black_id}",
+                        {
+                            "type": "delete_game_broadcast",
+                            "game_id": game_id,
+                        }
+                    )
+            else:
+                await self.send_json({"type": "error", "message": "You are not authorized to delete this game."})
+        except Game.DoesNotExist:
+            await self.send_json({"type": "error", "message": "Game not found."})
+
+    async def delete_game_broadcast(self, event):
+        """
+        Broadcast game deletion to the user.
+        """
+        await self.send_game_history()
+
+    async def handle_send_challenge(self, content):
+        """
+        Handle sending a challenge to another player.
+        """
+        player_id = content.get("player_id")
+        if not player_id:
+            await self.send_json({"type": "error", "message": "No player ID provided for challenge."})
+            return
+
+        try:
+            challenged_player = await sync_to_async(User.objects.get)(id=player_id)
+            # Create challenge
+            challenge = await sync_to_async(Challenge.objects.create)(
+                challenger=self.user, challenged=challenged_player
+            )
+
+            # Notify challenged player
+            await self.channel_layer.group_send(
+                f"user_{player_id}",
+                {"type": "broadcast_challenges"}
+            )
+            await self.send_json({"type": "success", "message": "Challenge sent successfully!"})
+        except User.DoesNotExist:
+            await self.send_json({"type": "error", "message": "Player not found."})        
 
     async def send_challenges(self):
         """
@@ -145,16 +306,31 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
         """
         Send the list of currently online players, excluding the current user.
         """
-        players = await sync_to_async(
-            lambda: UserStatus.objects.filter(is_logged_in=True).exclude(user=self.user)
+        online_users = await sync_to_async(
+            lambda: list(UserStatus.objects.filter(is_logged_in=True).values_list('user_id', flat=True))
         )()
-        players_data = await sync_to_async(
-            lambda: [{"id": player.user.id, "username": player.user.username} for player in players]
-        )()
-        await self.send_json({
-            "type": "available_players",
-            "players": players_data
-        })
+
+        # Broadcast personalized lists to each online user
+        for user_id in online_users:
+            # Get the available players excluding the current user
+            available_players = await sync_to_async(
+                lambda: list(
+                    UserStatus.objects.filter(is_logged_in=True).exclude(user_id=user_id)
+                )
+            )()
+
+            players_data = await sync_to_async(
+                lambda: [{"id": player.user.id, "username": player.user.username} for player in available_players]
+            )()
+
+            # Send personalized list to each user
+            await self.channel_layer.group_send(
+                f"user_{user_id}",
+                {
+                    "type": "broadcast_available_players",
+                    "players": players_data,
+                }
+            )
 
     async def check_game_start(self):
         """
@@ -176,23 +352,28 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
         """
         Send the updated game history to the user.
         """
+        # Fetch games asynchronously
         games = await sync_to_async(
-            lambda: Game.objects.filter(
+            lambda: list(Game.objects.filter(
                 models.Q(player_white=self.user) | models.Q(player_black=self.user)
-            ).order_by('-id')
+            ).order_by('-id'))
         )()
-        games_data = await sync_to_async(
-            lambda: [
-                {
-                    "id": game.id,
-                    "opponent": game.player_black.username if game.player_white == self.user else game.player_white.username,
-                    "result": "Win" if game.winner == self.user else "Loss" if game.winner else "Ongoing",
-                    "move_count": game.move_count,
-                    "journal_entry": game.journal_entry or "None",
-                }
-                for game in games
-            ]
-        )()
+
+        # Prepare games data asynchronously to handle related object lookups
+        games_data = []
+        for game in games:
+            player_white = await sync_to_async(lambda: game.player_white)()
+            player_black = await sync_to_async(lambda: game.player_black)()
+            winner = await sync_to_async(lambda: game.winner)()
+            games_data.append({
+                "id": game.id,
+                "opponent": player_black.username if player_white == self.user else player_white.username,
+                "result": "Win" if winner == self.user else "Loss" if winner else "Ongoing",
+                "move_count": game.move_count,
+                "journal_entry": game.journal_entry or "None",
+            })
+
+        # Send game history as JSON
         await self.send_json({
             "type": "game_history",
             "games": games_data,
@@ -235,7 +416,10 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
         """
         Broadcast the updated list of available players to the client.
         """
-        await self.send_available_players()
+        await self.send_json({
+            "type": "available_players",
+            "players": event["players"]
+        })
 
 class GameConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
@@ -264,18 +448,8 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
 
         # Example: Handle move submission
         if action == 'move':
-            move = data['move']
-            user = self.scope['user']
-            response = await self.handle_move(user, move)
-
-            # Send updated board state to the group
-            await self.channel_layer.group_send(
-                self.game_group_name,
-                {
-                    'type': 'game_update',
-                    'message': response
-                }
-            )
+            print("INSIDE MOVE RECIEVE")
+            await self.handle_move(data.get("move"))
         elif action == 'game_resigned':
             user = self.scope['user']
             await self.handle_resignation(user)
@@ -287,7 +461,7 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         winner = event.get("winner")
         print(f"Game resigned event received. Winner: {winner}")
         await self.send_json({
-            "type": "game_resigned",
+            "status": "game_resigned",
             "winner": winner
         })
     
@@ -326,27 +500,51 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             print("Game not found.")
 
     async def game_update(self, event):
-        # Send the updated board state to the WebSocket
-        await self.send(text_data=json.dumps(event['message']))
+        await self.send_json({
+            "type": "game_update",
+            "fen": event["fen"],
+            "turn": event["turn"],
+        })
 
-    @sync_to_async
-    def handle_move(self, user, move):
-        # Process move logic here
+    async def handle_move(self, move):
         try:
-            game = Game.objects.get(id=self.game_id)
+            print("Inside handle_move")
+            game = await sync_to_async(Game.objects.get)(id=self.game_id)
             board = chess.Board(game.current_fen)
+            # Fetch foreign key fields asynchronously
+            player_white = await sync_to_async(lambda: game.player_white)()
+            player_black = await sync_to_async(lambda: game.player_black)()
 
-            if user == game.player_white if board.turn else game.player_black:
-                chess_move = chess.Move.from_uci(move)
-                if chess_move in board.legal_moves:
-                    board.push(chess_move)
-                    game.current_fen = board.fen()
-                    game.save()
+            print(f"player_white = {player_white}")
+            print(f"player_black = {player_black}")
+            print(f"board.turn = {board.turn}")
+            current_player = player_white if board.turn == chess.WHITE else player_black
+            print(f"current_player = {current_player}") 
+            if self.scope["user"] != current_player:
+                print("Not your turn!")
+                await self.send_json({"status": "error", "message": "Not your turn!"})
+                return
 
-                    return {'status': 'success', 'fen': board.fen(), 'turn': board.turn}
-                else:
-                    return {'status': 'error', 'message': 'Invalid move'}
+            chess_move = chess.Move.from_uci(move)
+            if chess_move in board.legal_moves:
+                board.push(chess_move)
+                game.current_fen = board.fen()
+                await sync_to_async(game.save)()
+
+                await self.channel_layer.group_send(
+                    self.game_group_name,
+                    {
+                        "type": "game_update",
+                        "fen": board.fen(),
+                        "turn": board.turn == chess.WHITE,
+                    }
+                )
+                print(f"Turn: {board.turn}")
+                print(f"Broadcasted update: FEN={board.fen()} Turn={board.turn == chess.WHITE}")
             else:
-                return {'status': 'error', 'message': 'Not your turn'}
+                print(f"Invalid move: {move}")
+                await self.send_json({"status": "error", "message": f"Invalid move: {move} is not allowed!"})
+                return
         except Game.DoesNotExist:
-            return {'status': 'error', 'message': 'Game not found'}
+            print("GAME NOT FOUND")
+            await self.send_json({"status": "error", "message": "Game not found"})
