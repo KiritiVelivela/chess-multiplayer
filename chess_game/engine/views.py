@@ -15,7 +15,6 @@ from .forms import JournalForm
 import chess
 
 
-# Create your views here.
 @login_required(login_url='login')
 def home(request):
     # Check if the user has an ongoing game
@@ -200,17 +199,14 @@ def generate_board_structure_with_labels(board):
 
 @login_required(login_url='login')
 def game_detail(request, game_id):
-    # Fetch the game object
     game = get_object_or_404(Game, id=game_id)
 
-    # Create the board object based on the game's current state
     board = chess.Board(game.current_fen)
 
-    # Pass initial rendering context to the template
     context = {
         'game': game,
-        'fen': game.current_fen,  # FEN for the initial state
-        'is_ongoing': not game.game_over,  # Is the game still active?
+        'fen': game.current_fen,
+        'is_ongoing': not game.game_over,
         'player_color': 'white' if request.user == game.player_white else 'black',
         'turn': board.turn == chess.WHITE
     }
@@ -247,12 +243,10 @@ def respond_challenge(request, challenge_id):
                 current_fen=chess.Board().fen()
             )
 
-            # Validate that game.id is not None
             if not game.id:
                 messages.error(request, "Game creation failed. Please try again.")
                 return redirect("home")
 
-            # Notify both players of game start
             async_to_sync(channel_layer.group_send)(
                 f"user_{challenge.challenger.id}",
                 {

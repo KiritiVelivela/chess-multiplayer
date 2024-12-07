@@ -64,8 +64,9 @@
 </div>
 
 <script>
+    const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
     const homeSocket = new WebSocket(
-        'ws://' + window.location.host + '/ws/home/'
+        wsScheme+ '://' + window.location.host + '/ws/home/'
     );
 
     homeSocket.onopen = function () {
@@ -99,9 +100,8 @@
         }
 
         if (data.type === "game_history") {
-            console.log("Game history received:", data.games); // Log received data
             const gameHistoryTable = document.querySelector("#game-history-tbody");
-            gameHistoryTable.innerHTML = ""; // Clear existing rows
+            gameHistoryTable.innerHTML = "";
 
             data.games.forEach((game, index) => {
                 const row = `
@@ -149,11 +149,11 @@
 
         if (data.type === "available_players") {
             const playerSelect = document.getElementById("player_black");
-            playerSelect.innerHTML = ""; // Clear existing options
+            playerSelect.innerHTML = "";
 
             if (data.type === "available_players") {
                 const playerSelect = document.getElementById("player_black");
-                playerSelect.innerHTML = ""; // Clear existing options
+                playerSelect.innerHTML = "";
 
                 if (data.players.length > 0) {
                     data.players.forEach(player => {
@@ -173,10 +173,7 @@
 
         if (data.type === "game_start") {
             if (data.game_url) {
-                console.log("inside IF");
-                console.log(data)
-                console.log("===========================")
-                window.location.href = data.game_url;  // Redirect to game URL
+                window.location.href = data.game_url;
             } else {
                 console.error("Game start URL is missing.");
                 console.error(data);
@@ -187,7 +184,7 @@
     homeSocket.onclose = function () {
         console.error("WebSocket closed. Reconnecting in 5 seconds...");
         setTimeout(() => {
-            location.reload(); // Refresh to reconnect
+            location.reload();
         }, 5000);
     };
 

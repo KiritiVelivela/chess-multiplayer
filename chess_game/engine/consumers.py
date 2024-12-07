@@ -8,19 +8,11 @@ from .models import Game, Challenge
 from users.models import UserStatus
 import chess
 
-# engine/consumers.py
-# from channels.generic.websocket import AsyncJsonWebsocketConsumer
-# from django.contrib.auth.models import User
-# from .models import Challenge, Game
-
 class HomeConsumer(AsyncJsonWebsocketConsumer):
     async def connect(self):
-        """
-        Handle WebSocket connection. Add the user to a personal group if authenticated.
-        """
         if self.scope["user"].is_authenticated:
             self.user = self.scope["user"]
-            # Add the user to a personal group for challenge and game updates
+            # Add the user to a personal group for challenge
             await self.channel_layer.group_add(
                 f"user_{self.user.id}",
                 self.channel_name
@@ -32,15 +24,12 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             await self.accept()
             # Mark user as online
             await sync_to_async(UserStatus.objects.filter(user=self.user).update)(is_logged_in=True)
-            await self.send_available_players()  # Notify all users of the updated list      
-            await self.send_game_history()      
+            await self.send_available_players()  # Notify all users of the updated list
+            await self.send_game_history()
         else:
             await self.close()
 
     async def disconnect(self, close_code):
-        """
-        Handle WebSocket disconnection. Remove the user from the groups.
-        """
         if hasattr(self, "user"):
             await self.channel_layer.group_discard(
                 f"user_{self.user.id}",
@@ -55,9 +44,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             await self.send_available_players()  # Notify all users of the updated list
 
     async def receive_json(self, content):
-        """
-        Handle messages from the client. Perform actions based on the "action" key.
-        """
         action = content.get("action")
         if action == "get_challenges":
             await self.send_challenges()
@@ -77,9 +63,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             await self.save_journal(content)
 
     async def handle_edit_journal(self, content):
-        """
-        Handle the request to edit a game's journal.
-        """
         game_id = content.get("game_id")
         if not game_id:
             await self.send_json({"type": "error", "message": "No game ID provided for editing."})
@@ -91,7 +74,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             player_black = await sync_to_async(lambda: game.player_black)()
 
             if player_white == self.user or player_black == self.user:
-                # Send back game details for editing
                 game_data = {
                     "id": game.id,
                     "journal_entry": game.journal_entry or "",
@@ -104,9 +86,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "message": "Game not found."})
 
     async def save_journal(self, content):
-        """
-        Save the updated journal for a game.
-        """
         game_id = content.get("game_id")
         journal_entry = content.get("journal_entry")
 
@@ -124,8 +103,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
                 await sync_to_async(game.save)()
                 player_white_id = player_white.id if player_white else None
                 player_black_id = player_black.id if player_black else None
-                # Notify all users of the updated game history
-                                # Notify both players of the deletion
                 if player_white_id:
                     await self.channel_layer.group_send(
                         f"user_{player_white_id}",
@@ -148,9 +125,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             await self.send_json({"type": "error", "message": "Game not found."})
 
     async def handle_delete_game(self, content):
-        """
-        Handle the request to delete a game.
-        """
         game_id = content.get("game_id")
         if not game_id:
             await self.send_json({"type": "error", "message": "No game ID provided for deletion."})
@@ -265,7 +239,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             challenge.accepted = True
             await sync_to_async(challenge.save)()
 
-            # Create a new game
             game = await sync_to_async(Game.objects.create)(
                 player_white=challenger,
                 player_black=challenged,
@@ -303,9 +276,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
         await self.send_challenges()
 
     async def send_available_players(self):
-        """
-        Send the list of currently online players, excluding the current user.
-        """
         online_users = await sync_to_async(
             lambda: list(UserStatus.objects.filter(is_logged_in=True).values_list('user_id', flat=True))
         )()
@@ -333,9 +303,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             )
 
     async def check_game_start(self):
-        """
-        Check if the user has an active game and notify the client.
-        """
         game = await sync_to_async(
             lambda: Game.objects.filter(
                 models.Q(player_white=self.user) | models.Q(player_black=self.user),
@@ -349,17 +316,12 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             })
 
     async def send_game_history(self):
-        """
-        Send the updated game history to the user.
-        """
-        # Fetch games asynchronously
         games = await sync_to_async(
             lambda: list(Game.objects.filter(
                 models.Q(player_white=self.user) | models.Q(player_black=self.user)
             ).order_by('-id'))
         )()
 
-        # Prepare games data asynchronously to handle related object lookups
         games_data = []
         for game in games:
             player_white = await sync_to_async(lambda: game.player_white)()
@@ -373,28 +335,18 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
                 "journal_entry": game.journal_entry or "None",
             })
 
-        # Send game history as JSON
         await self.send_json({
             "type": "game_history",
             "games": games_data,
         })
 
     async def broadcast_game_history(self, event):
-        """
-        Broadcast updated game history data to the user when changes occur.
-        """
         await self.send_game_history()
 
     async def broadcast_challenges(self, event):
-        """
-        Broadcast updated challenge data to the user when changes occur.
-        """
         await self.send_challenges()
 
     async def broadcast_game_start(self, event):
-        """
-        Broadcast game start information to the user.
-        """
         game_id = event.get("game_id")
         
         if not game_id:
@@ -413,9 +365,6 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
         })
 
     async def broadcast_available_players(self, event):
-        """
-        Broadcast the updated list of available players to the client.
-        """
         await self.send_json({
             "type": "available_players",
             "players": event["players"]
@@ -446,7 +395,6 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         data = json.loads(text_data)
         action = data.get('action')
 
-        # Example: Handle move submission
         if action == 'move':
             print("INSIDE MOVE RECIEVE")
             await self.handle_move(data.get("move"))
@@ -455,9 +403,6 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             await self.handle_resignation(user)
     
     async def game_resigned(self, event):
-        """
-        Notify players that the game has been resigned and redirect them.
-        """
         winner = event.get("winner")
         print(f"Game resigned event received. Winner: {winner}")
         await self.send_json({
@@ -466,13 +411,9 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
         })
     
     async def handle_resignation(self, user):
-        """
-        Handle the resignation logic and notify all players in the game.
-        """
         try:
             game = await sync_to_async(Game.objects.get)(id=self.game_id)
 
-            # Fetch foreign key fields asynchronously
             player_white = await sync_to_async(lambda: game.player_white)()
             player_black = await sync_to_async(lambda: game.player_black)()
 
@@ -511,7 +452,6 @@ class GameConsumer(AsyncJsonWebsocketConsumer):
             print("Inside handle_move")
             game = await sync_to_async(Game.objects.get)(id=self.game_id)
             board = chess.Board(game.current_fen)
-            # Fetch foreign key fields asynchronously
             player_white = await sync_to_async(lambda: game.player_white)()
             player_black = await sync_to_async(lambda: game.player_black)()
 

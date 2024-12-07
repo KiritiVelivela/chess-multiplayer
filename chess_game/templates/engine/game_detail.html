@@ -43,17 +43,12 @@
     </div>
 </div>
 
-<!-- {% if invalid_move %}
-    <div class="alert alert-danger">
-        Invalid move: {{ invalid_move }}
-    </div>
-{% endif %} -->
-
 <hr/>
 {% endif %}
 <script>
+    const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
     const gameSocket = new WebSocket(
-        'ws://' + window.location.host + '/ws/game/{{ game.id }}/'
+        wsScheme + '://' + window.location.host + '/ws/game/{{ game.id }}/'
     );
 
     gameSocket.onopen = function(e) {
@@ -73,20 +68,17 @@
     document.addEventListener("DOMContentLoaded", function () {
         const moveForm = document.querySelector('#move-form');
 
-        // Attach the event listener
         moveForm.onsubmit = function (e) {
-            e.preventDefault(); // Prevent form's default POST action
+            e.preventDefault();
             console.log("Move form submitted.");
 
             const moveInput = document.querySelector('#move-input').value;
 
-            // Send the move to the WebSocket
             gameSocket.send(JSON.stringify({
                 'action': 'move',
                 'move': moveInput
             }));
 
-            // Clear the input field
             document.querySelector('#move-input').value = '';
         };
 
@@ -100,16 +92,12 @@
         if (data.status === 'success') {
             updateBoard(data.fen, data.turn);  // Update board and turn
         } else if (data.status === 'error') {
-            console.log("ON MESSAGE error");
-            console.log(data);
-            showErrorModal(data.message); // Show a styled error alert
+            showErrorModal(data.message);
         } else if (data.status === "game_resigned") {
             console.log(`Game resigned by opponent. Winner: ${data.winner}`);
-            // alert(`The game is over. ${data.winner} has won!`);
             showResignationModal(data.winner);
         } else if (data.type === "game_update") {
-            console.log("CALLING UPDATEBOARD")
-            updateBoard(data.fen, data.turn); // Update board based on FEN and turn
+            updateBoard(data.fen, data.turn);
         }
     };
 
@@ -117,12 +105,9 @@
         console.error('WebSocket closed unexpectedly');
     };
 
-    // Render the initial board from the FEN passed from the server
     document.addEventListener("DOMContentLoaded", function () {
-        const initialFEN = "{{ fen }}"; // FEN string passed from the server
-        const initialTurn = "{{ turn }}"; // Turn (true for white, false for black)
-        console.log("Board Loading turn = " + initialTurn);
-        console.log("Initial load FEN = " + initialFEN);
+        const initialFEN = "{{ fen }}";
+        const initialTurn = "{{ turn }}";
         updateBoard(initialFEN, initialTurn === 'True');
     });
 
@@ -144,22 +129,9 @@
         const rows = fen.split(" ")[0].split("/");
         let boardHTML = "";
 
-        // Add top row for column labels
-        // boardHTML += `<div class="board-row">`;
-        // boardHTML += `<div class="board-cell label"></div>`; // Empty top-left corner
-        // for (let col = 0; col < 8; col++) {
-        //     boardHTML += `<div class="board-cell label">${String.fromCharCode(97 + col)}</div>`;
-        // }
-        // boardHTML += `</div>`;
-
-        // Generate board rows
         rows.forEach((row, rowIndex) => {
             boardHTML += `<div class="board-row">`;
 
-            // Add row number on the left
-            // boardHTML += `<div class="board-cell label">${8 - rowIndex}</div>`;
-
-            // Generate chessboard cells
             for (const char of row) {
                 if (isNaN(char)) {
                     const piece = getPieceFromFENChar(char);
@@ -180,7 +152,7 @@
 
         // Add bottom row for column labels
         boardHTML += `<div class="board-row">`;
-        // boardHTML += `<div class="board-cell label"></div>`; // Empty bottom-left corner
+
         for (let col = 0; col < 8; col++) {
             boardHTML += `<div class="board-cell label">${String.fromCharCode(97 + col)}</div>`;
         }
@@ -190,7 +162,6 @@
 
         // Update the turn indicator
         const turnIndicator = document.querySelector(".turn-indicator");
-        console.log("Turn received from backend:", turn);  // Frontend log
         if (turn) {
             turnIndicator.textContent = "It's White's turn!";
             turnIndicator.classList.remove("alert-dark");
@@ -276,10 +247,9 @@
             </div>
         `;
 
-        // Append the modal HTML to the body
+
         document.body.insertAdjacentHTML('beforeend', modalHTML);
 
-        // Initialize and show the modal
         const modal = new bootstrap.Modal(document.getElementById('errorModal'));
         modal.show();
 
