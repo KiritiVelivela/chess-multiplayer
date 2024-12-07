@@ -268,12 +268,20 @@ class HomeConsumer(AsyncJsonWebsocketConsumer):
             await self.channel_layer.group_send(
                 f"user_{challenger.id}",
                 {
-                    "type": "broadcast_challenges",
+                    "type": "challenge_rejected",
+                    "challenger": self.user.username,
+                    "challenge_id": challenge.id,
                 }
             )
 
-        # Send updated challenges to the challenged player
         await self.send_challenges()
+    
+    async def challenge_rejected(self, event):
+        # Send a message back to the WebSocket client indicating the rejection.
+        await self.send_json({
+            "type": "challenge_rejected",
+            "message": f"Your challenge was rejected by {event.get('challenger', 'unknown')}."
+        })
 
     async def send_available_players(self):
         online_users = await sync_to_async(
