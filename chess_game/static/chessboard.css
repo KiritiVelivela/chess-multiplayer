@@ -1,66 +1,64 @@
-/*
-  Create your CSS for Project 1 here...
-*/
 body {
   font-family: sans-serif;
 }
 
 .chessboard-container {
-  display: flex;
-  justify-content: center;
-  margin-top: 20px;
-  align-items: center;
+  display: inline-block;
+  margin: auto;
+  border: 2px solid black;
 }
 
-.chessTile {
-  font-size: 40px;
-  line-height: 60px;
-  text-align: center;
+.board-row {
   display: flex;
-  justify-content: center;
-  align-items: center;
+}
+
+.board-cell {
   width: 60px;
   height: 60px;
-}
-
-#chessboard-with-border {
-  display: grid;
-  grid-template-columns: 20px repeat(8, 60px);
-  grid-template-rows: 20px repeat(8, 60px);
-  gap: 0;
-  border: 1px solid black;
-  margin: auto;
-}
-
-#chessboard-with-border > .chessTile:nth-child(odd) {
-  background-color: tan;
-}
-
-#chessboard-with-border > .chessTile:nth-child(even) {
-  background-color: chocolate;
-}
-
-
-.labelTile {
   display: flex;
   justify-content: center;
   align-items: center;
-  font-weight: bold;
-  font-size: 18px;
-  background-color: tan;
+  font-size: 32px;
+  box-sizing: border-box;
 }
 
-.emptyTile {
-  background-color: transparent;
+.board-cell:nth-child(odd) {
+  background-color: tan; /* Light square */
+}
+
+.board-cell:nth-child(even) {
+  background-color: chocolate; /* Dark square */
+}
+
+.board-row:nth-child(even) .board-cell:nth-child(odd) {
+  background-color: chocolate; /* Dark square */
+}
+
+.board-row:nth-child(even) .board-cell:nth-child(even) {
+  background-color: tan; /* Light square */
+}
+
+.board-cell.label {
+  background-color: white;
+  color: black;
+  font-weight: bold;
+  font-size: 16px;
+  border: 1px solid black;
+}
+
+.chess-piece {
+  font-size: 32px;
 }
 
 .chessboardButtons {
   margin-top: 1%;
 }
 
-.snap {
-  display: block;
-  margin-left: auto;
-  margin-right: auto;
-  width: 50%;
+.modal-header .text-danger {
+  color: #dc3545; /* Bootstrap danger color */
+  font-weight: bold;
+}
+
+.modal-body {
+  font-size: 1.2rem;
 }

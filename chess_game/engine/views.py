@@ -7,15 +7,26 @@ from django.http import JsonResponse, HttpResponseForbidden
 from django.urls import reverse
 from django.db import models
 from django.template.loader import render_to_string
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 from .models import Game, Move, Challenge
 from .forms import JournalForm
 
 import chess
 
 
-# Create your views here.
 @login_required(login_url='login')
 def home(request):
+    # Check if the user has an ongoing game
+    ongoing_game = Game.objects.filter(
+        models.Q(player_white=request.user) | models.Q(player_black=request.user),
+        game_over=False
+    ).first()
+
+    if ongoing_game:
+        # Redirect to the game detail page if an ongoing game exists
+        return redirect('game_detail', game_id=ongoing_game.id)
+    
     if request.method == 'POST':
 
         challenged_player_id = request.POST.get('player_black')
@@ -24,6 +35,13 @@ def home(request):
         challenge = Challenge.objects.create(
             challenger=request.user,
             challenged=challenged_player
+        )
+
+        # Broadcast the challenge update to the challenged player
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            f"user_{challenged_player.id}",
+            {"type": "broadcast_challenges"}
         )
 
         messages.success(request, f"Challenge sent to {challenged_player.username}!")
@@ -96,6 +114,7 @@ def start_new_game(request):
     
     return render(request, 'engine/start_game.html')
 
+@login_required(login_url='login')
 def resign_game(request, game_id):
     game = get_object_or_404(Game, id=game_id)
 
@@ -108,11 +127,41 @@ def resign_game(request, game_id):
     game.game_over = True
     game.save()
 
+    channel_layer = get_channel_layer()
+    print(f"Player {request.user.username} resigned. Notifying players...")
+    async_to_sync(channel_layer.group_send)(
+        f"user_{game.player_white.id}",
+        {"type": "broadcast_game_history"}
+    )
+    async_to_sync(channel_layer.group_send)(
+        f"user_{game.player_black.id}",
+        {"type": "broadcast_game_history"}
+    )
+
     context = {
         'game': game,
         'winner': game.winner,
         'resigned_player': request.user
     }
+
+    async_to_sync(channel_layer.group_send)(
+        f"user_{game.player_white.id}",
+        {
+            "type": "game_resigned",
+            "winner": game.winner.username
+        }
+    )
+    print(f"Sent resignation notification to user_{game.player_white.id}")
+
+
+    async_to_sync(channel_layer.group_send)(
+        f"user_{game.player_black.id}",
+        {
+            "type": "game_resigned",
+            "winner": game.winner.username
+        }
+    )
+    print(f"Sent resignation notification to user_{game.player_black.id}")
 
     return render(request, 'engine/game_over.html', context)
 
@@ -148,40 +197,20 @@ def generate_board_structure_with_labels(board):
     zipped_structure = zip(board_structure, rank_labels)
     return zipped_structure
 
+@login_required(login_url='login')
 def game_detail(request, game_id):
     game = get_object_or_404(Game, id=game_id)
+
     board = chess.Board(game.current_fen)
-
-    board_structure = generate_board_structure_with_labels(board)
-
-    if request.method == "POST":
-        move_input = request.POST.get("move")
-
-        current_player = game.player_white if board.turn == chess.WHITE else game.player_black
-
-        if request.user != current_player:
-            return JsonResponse({'invalid_move': 'It is not your turn!'})
-
-        try:
-            move = chess.Move.from_uci(move_input)
-        except ValueError:
-            return JsonResponse({'invalid_move': 'Invalid move format. Please enter in the correct format (e.g., e2e4).'})
-
-        if move in board.legal_moves:
-            board.push(move)
-            game.current_fen = board.fen()
-            game.save()
-
-            return JsonResponse({'board_fen': board.fen(), 'invalid_move': None, 'turn': board.turn})
-        else:
-            return JsonResponse({'invalid_move': 'This move is invalid. Please make a legal move.'})
 
     context = {
         'game': game,
-        'board_structure': board_structure,
-        'invalid_move': None,
-        'is_ongoing': not game.game_over
+        'fen': game.current_fen,
+        'is_ongoing': not game.game_over,
+        'player_color': 'white' if request.user == game.player_white else 'black',
+        'turn': board.turn == chess.WHITE
     }
+
     return render(request, 'engine/game_detail.html', context)
 
 def update_board(request, game_id):
@@ -200,10 +229,10 @@ def update_board(request, game_id):
 @login_required(login_url='login')
 def respond_challenge(request, challenge_id):
     challenge = get_object_or_404(Challenge, id=challenge_id, challenged=request.user)
-    
+    channel_layer = get_channel_layer()
+
     if request.method == 'POST':
         action = request.POST.get('action')
-
         if action == 'accept':
             challenge.accepted = True
             challenge.save()
@@ -214,19 +243,47 @@ def respond_challenge(request, challenge_id):
                 current_fen=chess.Board().fen()
             )
 
-            messages.success(request, 'Your challenge has been accepted by {}!'.format(challenge.challenged.username))
+            if not game.id:
+                messages.error(request, "Game creation failed. Please try again.")
+                return redirect("home")
 
-            return redirect('game_detail', game_id=game.id)
-        
+            async_to_sync(channel_layer.group_send)(
+                f"user_{challenge.challenger.id}",
+                {
+                    "type": "broadcast_game_start",
+                    "game_id": game.id
+                }
+            )
+            async_to_sync(channel_layer.group_send)(
+                f"user_{challenge.challenged.id}",
+                {
+                    "type": "broadcast_game_start",
+                    "game_id": game.id
+                }
+            )
+
+            async_to_sync(channel_layer.group_send)(
+                f"user_{challenge.challenger.id}",
+                {"type": "broadcast_game_history"}
+            )
+            async_to_sync(channel_layer.group_send)(
+                f"user_{challenge.challenged.id}",
+                {"type": "broadcast_game_history"}
+            )
+
+            return redirect("game_detail", game_id=game.id)
         elif action == 'reject':
             challenge.accepted = False
             challenge.save()
 
-            messages.info(request, '{} has rejected your challenge.'.format(challenge.challenged.username))
+            # Notify the challenger of rejection
+            async_to_sync(channel_layer.group_send)(
+                f"user_{challenge.challenger.id}",
+                {"type": "broadcast_challenges"}
+            )
 
-            return redirect('home')
-    
-    return redirect('home')
+            return redirect("home")
+    return redirect("home")
 
 @login_required(login_url='login')
 def check_challenges(request):

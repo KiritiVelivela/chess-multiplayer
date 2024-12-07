@@ -7,15 +7,12 @@
 <h2 class="text-center">CSCI 620: Chess Game by Satya Kiriti Velivela</h2>
 
 <div class="row justify-content-center">
-    <div class="chessboard-container">
-        {% include 'engine/partials/chessboard.html' %}
-    </div>
+    <div id="chessboard-with-border" class="chessboard-container"></div>
 </div>
 
 <div class="row justify-content-center text-center">
     <div class="chessboardButtons">
-        <form id="move-form" method="POST">
-            {% csrf_token %}
+        <form id="move-form">
             <input type="text" id="move-input" placeholder="Enter move (e.g., e2e4)" name="move" class="form-control d-inline-block" style="width: auto; display: inline;">
             <button type="submit" class="btn btn-primary">Move</button>
         </form>
@@ -23,10 +20,9 @@
 </div>
 
 <div class="row justify-content-center">
-    <form method="POST" action="{% url 'resign_game' game.id %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Resign</button>
-    </form>
+    <div class="row justify-content-center">
+        <button type="button" class="btn btn-danger" id="resignButton">Resign</button>
+    </div>
 </div>
 
 
@@ -43,110 +39,225 @@
 
 <!-- Show whose turn it is -->
 <div class="row justify-content-center">
-    <div class="alert turn-indicator {% if board.turn == chess.WHITE %}alert-light{% else %}alert-dark{% endif %}">
-        It's {% if board.turn == chess.WHITE %}White{% else %}Black{% endif %}'s turn.
+    <div class="alert turn-indicator ">
     </div>
 </div>
-
-{% if invalid_move %}
-    <div class="alert alert-danger">
-        Invalid move: {{ invalid_move }}
-    </div>
-{% endif %}
 
 <hr/>
 {% endif %}
 <script>
+    const wsScheme = window.location.protocol === "https:" ? "wss" : "ws";
+    const gameSocket = new WebSocket(
+        wsScheme + '://' + window.location.host + '/ws/game/{{ game.id }}/'
+    );
 
-let lastBoardFen = "{{ game.current_fen }}";  // Store the last known board state
+    gameSocket.onopen = function(e) {
+        console.log("WebSocket connected.");
+    }
 
-function checkGameStatus() {
-    $.ajax({
-        url: "{% url 'check_game_status' game.id %}",
-        method: "GET",
-        success: function(data) {
-            if (data.game_over) {
-                // If the game is over, display a message and redirect to the result page
-                alert("The game is over. Winner: " + data.winner);
-                window.location.href = "{% url 'game_over' game.id %}";
-            } else {
-                // If the board state has changed, update it dynamically
-                if (data.board_fen !== lastBoardFen) {
-                    updateBoard(data.board_fen, data.turn);  // Function to update the board based on FEN
-                    lastBoardFen = data.board_fen;  // Update the last known board state
+    document.getElementById("resignButton").addEventListener("click", function () {
+        if (confirm("Are you sure you want to resign?")) {
+            console.log("INSIDE RESIGN CONFIRMATION")
+            // Send a resignation event via WebSocket
+            gameSocket.send(JSON.stringify({
+                'action': 'game_resigned'
+            }));
+        }
+    });
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const moveForm = document.querySelector('#move-form');
+
+        moveForm.onsubmit = function (e) {
+            e.preventDefault();
+            console.log("Move form submitted.");
+
+            const moveInput = document.querySelector('#move-input').value;
+
+            gameSocket.send(JSON.stringify({
+                'action': 'move',
+                'move': moveInput
+            }));
+
+            document.querySelector('#move-input').value = '';
+        };
+
+        console.log("Move form listener attached.");
+    });
+
+    gameSocket.onmessage = function(e) {
+        
+        const data = JSON.parse(e.data);
+
+        if (data.status === 'success') {
+            updateBoard(data.fen, data.turn);  // Update board and turn
+        } else if (data.status === 'error') {
+            showErrorModal(data.message);
+        } else if (data.status === "game_resigned") {
+            console.log(`Game resigned by opponent. Winner: ${data.winner}`);
+            showResignationModal(data.winner);
+        } else if (data.type === "game_update") {
+            updateBoard(data.fen, data.turn);
+        }
+    };
+
+    gameSocket.onclose = function(e) {
+        console.error('WebSocket closed unexpectedly');
+    };
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const initialFEN = "{{ fen }}";
+        const initialTurn = "{{ turn }}";
+        updateBoard(initialFEN, initialTurn === 'True');
+    });
+
+    document.querySelector('#move-form').onsubmit = function(e) {
+        e.preventDefault();
+        const moveInput = document.querySelector('#move-input').value;
+
+        gameSocket.send(JSON.stringify({
+            'action': 'move',
+            'move': moveInput
+        }));
+
+        document.querySelector('#move-input').value = '';
+    };
+
+    function updateBoard(fen, turn) {
+        console.log("UPDATE BOARD CALLED");
+        const boardElement = document.querySelector("#chessboard-with-border");
+        const rows = fen.split(" ")[0].split("/");
+        let boardHTML = "";
+
+        rows.forEach((row, rowIndex) => {
+            boardHTML += `<div class="board-row">`;
+
+            for (const char of row) {
+                if (isNaN(char)) {
+                    const piece = getPieceFromFENChar(char);
+                    boardHTML += `<div class="board-cell">
+                                    <span class="chess-piece ${piece.color}">${piece.symbol}</span>
+                                </div>`;
+                } else {
+                    for (let i = 0; i < parseInt(char); i++) {
+                        boardHTML += `<div class="board-cell empty"></div>`;
+                    }
                 }
             }
+
+            // Add row number on the right
+            boardHTML += `<div class="board-cell label">${8 - rowIndex}</div>`;
+            boardHTML += `</div>`;
+        });
+
+        // Add bottom row for column labels
+        boardHTML += `<div class="board-row">`;
+
+        for (let col = 0; col < 8; col++) {
+            boardHTML += `<div class="board-cell label">${String.fromCharCode(97 + col)}</div>`;
         }
-    });
-}
+        boardHTML += `</div>`;
 
-$('#move-form').submit(function(event) {
-    event.preventDefault();  // Prevent the default form submission
+        boardElement.innerHTML = boardHTML;
 
-    // Get the move input
-    var move = $('#move-input').val();
-
-    // Disable polling during move submission
-    clearInterval(gameStatusInterval);
-
-    $.ajax({
-        url: "{% url 'game_detail' game.id %}",
-        method: "POST",
-        data: {
-            'move': move,
-            'csrfmiddlewaretoken': '{{ csrf_token }}'
-        },
-        success: function(response) {
-            if (response.invalid_move) {
-                // Show invalid move message
-                alert(response.invalid_move);
-            } else {
-                // Update the board with the new move
-                updateBoard(response.board_fen, response.turn);
-                $('#move-input').val('');  // Clear the move input field
-                lastBoardFen = response.board_fen;  // Update the last known board state
-            }
-
-            // Re-enable polling after move submission
-            gameStatusInterval = setInterval(checkGameStatus, 5000);
-        },
-        error: function() {
-            alert("An error occurred while submitting the move.");
-
-            // Re-enable polling if there was an error
-            gameStatusInterval = setInterval(checkGameStatus, 5000);
+        // Update the turn indicator
+        const turnIndicator = document.querySelector(".turn-indicator");
+        if (turn) {
+            turnIndicator.textContent = "It's White's turn!";
+            turnIndicator.classList.remove("alert-dark");
+            turnIndicator.classList.add("alert-light");
+        } else {
+            turnIndicator.textContent = "It's Black's turn!";
+            turnIndicator.classList.remove("alert-light");
+            turnIndicator.classList.add("alert-dark");
         }
-    });
-});
+    }
 
-// Function to update the board using the FEN string dynamically
-function updateBoard(fen, turn) {
-    $.ajax({
-        url: "{% url 'update_board' game.id %}",
-        method: "GET",
-        success: function(data) {
-            $('#chessboard-with-border').html(data.board_html);
+    function getPieceFromFENChar(char) {
+        const pieceSymbols = {
+            p: { color: "black", symbol: "♟" },
+            r: { color: "black", symbol: "♜" },
+            n: { color: "black", symbol: "♞" },
+            b: { color: "black", symbol: "♝" },
+            q: { color: "black", symbol: "♛" },
+            k: { color: "black", symbol: "♚" },
+            P: { color: "white", symbol: "♙" },
+            R: { color: "white", symbol: "♖" },
+            N: { color: "white", symbol: "♘" },
+            B: { color: "white", symbol: "♗" },
+            Q: { color: "white", symbol: "♕" },
+            K: { color: "white", symbol: "♔" },
+        };
+        return pieceSymbols[char];
+    }
 
-            if (turn) {
-                // It's White's turn
-                $('.turn-indicator').text("It's White's turn!").removeClass('alert-dark').addClass('alert-light');
-            } else {
-                // It's Black's turn
-                $('.turn-indicator').text("It's Black's turn!").removeClass('alert-light').addClass('alert-dark');
-            }
-        },
-        error: function() {
-            alert("An error occurred while updating the board.");
-        }
-    });
-}
+    function showResignationModal(winner) {
+        const modalHTML = `
+            <div class="modal fade" id="resignationModal" tabindex="-1" aria-labelledby="resignationModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="resignationModalLabel">Game Over</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body" >
+                            The game is over. <strong>${winner}</strong> has won!
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" id="homeRedirectButton">Go to Home</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        const modal = new bootstrap.Modal(document.getElementById('resignationModal'));
+        modal.show();
 
-// Start polling only if the game is ongoing
-let gameStatusInterval;
-{% if is_ongoing %}
-    gameStatusInterval = setInterval(checkGameStatus, 5000);  // Poll every 5 seconds
-{% endif %}
+        // Redirect to home after a delay or button click
+        document.getElementById('homeRedirectButton').onclick = function () {
+            window.location.href = '/';
+        };
+
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 5000);
+    }
+
+    function showErrorModal(message) {
+        console.log("Inside showerrormodal == " + message);
+        const modalHTML = `
+            <div class="modal fade" id="errorModal" tabindex="-1" role="dialog" aria-labelledby="errorModalLabel" aria-hidden="true">
+                <div class="modal-dialog" role="document">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title text-danger" id="errorModalLabel">Invalid Move</h5>
+                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                <span aria-hidden="true">&times;</span>
+                            </button>
+                        </div>
+                        <div class="modal-body"id="errorModalBody" >
+                            <strong>${message}</stong>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
 
 
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+        const modal = new bootstrap.Modal(document.getElementById('errorModal'));
+        modal.show();
+
+        // Automatically remove the modal from the DOM after it's closed
+        const errorModalElement = document.getElementById('errorModal');
+        errorModalElement.addEventListener('hidden.bs.modal', () => {
+            errorModalElement.remove();
+        });
+    }
 </script>
 {% endblock %}

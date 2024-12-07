@@ -1,28 +1,33 @@
-
+# Use the official Python base image
 FROM python:3.9.10-slim-bullseye
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-
+# Install Redis server and supervisord
 RUN apt-get update && apt-get install -y \
+    redis-server \
+    supervisor \
     gcc musl-dev libpq-dev \
     netcat postgresql-client mime-support \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python dependencies
+# Set the working directory
+# WORKDIR /
+
+# Copy the requirements file
 COPY requirements.txt ./
-RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Copy the Django project code into the container
-COPY . ./
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose the port (Cloud Run uses the PORT environment variable)
-# ENV PORT 8000
-# EXPOSE 8000
-# WORKDIR /chess_game
+# Copy the rest of the application code
+COPY . /
 
-# CMD exec daphne -b 0.0.0.0 -p 8000 backend.asgi:application
+# Make the docker_run_server.sh script executable
 RUN chmod +x docker_run_server.sh
+
+# Copy the supervisord configuration
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Expose the port Daphne will run on
 EXPOSE 80
+
+# Set the entrypoint to your existing script
 ENTRYPOINT ["./docker_run_server.sh"]
