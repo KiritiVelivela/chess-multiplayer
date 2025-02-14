@@ -24,8 +24,8 @@ A real-time multiplayer chess platform built using **Django Channels, Redis, and
 
 ### 1 Clone the Repository  
 ```bash
-git clone https://github.com/your-username/real-time-chess.git
-cd real-time-chess
+git clone https://github.com/KiritiVelivela/chess-multiplayer.git
+cd chess-multiplayer
 ```
 
 ### 2 Setup a Virtual Environment
